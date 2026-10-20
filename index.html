@@ -721,7 +721,7 @@
        * ---------------------------------------------------------------- */
       const WORLD_W = 840;
       const WORLD_H = 1260;
-      const BASE_SIZE = e70;
+      const BASE_SIZE = 70;
       const MAX_LEVEL = 12; // 第13级按需求暂时留空；本版本最高可玩/通关等级为12
       const RESERVED_LEVEL = 13;
       const INITIAL_DROP_LEVELS = [1, 2, 3];
@@ -1870,18 +1870,56 @@
         if (state !== "start") return;
 
         state = "starting";
+
+        // 明确切换显示层级，避免移动端只播放了开始界面的淡出、
+        // 却因为 rAF 被挂起而没有真正创建物理世界。
         gameScreen.hidden = false;
+        gameScreen.removeAttribute("hidden");
+        gameScreen.style.display = "flex";
+        gameScreen.style.visibility = "visible";
+        gameScreen.style.opacity = "1";
+
         startScreen.classList.add("is-leaving");
         startScreen.setAttribute("aria-hidden", "true");
+        startScreen.style.pointerEvents = "none";
 
-        window.requestAnimationFrame(() => {
-          resizeCanvas();
-          resetRound();
-        });
+        function bootGame() {
+          if (state !== "starting") return;
+          try {
+            resizeCanvas();
+            resetRound();
+          } catch (error) {
+            console.error("进入游戏失败", error);
+          }
+        }
+
+        // 同步启动一次，再保留 rAF 与定时器兜底。
+        // 移动端某些内置浏览器会延迟/暂停 rAF，单靠 rAF 会卡在 starting。
+        bootGame();
+        window.requestAnimationFrame(bootGame);
+        window.setTimeout(bootGame, 120);
+        window.setTimeout(bootGame, 300);
 
         window.setTimeout(() => {
-          startScreen.hidden = true;
-        }, 380);
+          if (state === "playing") {
+            startScreen.hidden = true;
+            startScreen.style.display = "none";
+            resizeCanvas();
+            ensureLoop();
+            return;
+          }
+
+          // 启动异常时恢复开始界面，避免整页卡死。
+          startScreen.classList.remove("is-leaving");
+          startScreen.hidden = false;
+          startScreen.style.display = "flex";
+          startScreen.style.pointerEvents = "auto";
+          startScreen.setAttribute("aria-hidden", "false");
+          gameScreen.hidden = true;
+          state = "start";
+          startBtn.disabled = false;
+          startBtn.textContent = "开始游戏";
+        }, 440);
       }
 
       function restartGame() {
@@ -2260,7 +2298,10 @@
        * 事件绑定与初始化
        * ---------------------------------------------------------------- */
       function bindEvents() {
-        startBtn.addEventListener("click", startGame);
+        startBtn.addEventListener("click", (event) => {
+          if (event.cancelable) event.preventDefault();
+          startGame();
+        });
         startBtn.addEventListener("touchstart", handleStartTouch, { passive: false });
         restartBtn.addEventListener("click", restartGame);
         winRestartBtn.addEventListener("click", restartGame);
