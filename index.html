@@ -114,12 +114,14 @@
     }
 
     .start-btn {
+      position: relative;
+      z-index: 20;
       display: flex;
       align-items: center;
       justify-content: center;
-      min-width: clamp(184px, 53vw, 284px);
-      min-height: clamp(54px, 8vh, 64px);
-      padding: 12px 30px;
+      min-width: clamp(190px, 55vw, 300px);
+      min-height: clamp(60px, 9vh, 74px);
+      padding: 18px 38px;
       border: 2px solid rgba(255, 255, 255, 0.9);
       border-radius: 999px;
       background: #4CAF50;
@@ -134,6 +136,11 @@
       line-height: 1;
       letter-spacing: 0.1em;
       cursor: pointer;
+      pointer-events: auto;
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+      -webkit-user-select: none;
+      user-select: none;
       transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.2s ease;
     }
 
@@ -596,7 +603,7 @@
   <section class="start-screen" id="startScreen" aria-label="开始界面">
     <h1 class="start-title">合成奶蛙</h1>
     <img class="start-art" id="startArt" src="bg.jpg" alt="" draggable="false">
-    <button class="start-btn" id="startBtn" type="button" disabled>开始游戏</button>
+    <button class="start-btn" id="startBtn" type="button">开始游戏</button>
   </section>
 
   <!-- 游戏界面 -->
@@ -714,7 +721,7 @@
        * ---------------------------------------------------------------- */
       const WORLD_W = 840;
       const WORLD_H = 1260;
-      const BASE_SIZE = 70;
+      const BASE_SIZE = e70;
       const MAX_LEVEL = 12; // 第13级按需求暂时留空；本版本最高可玩/通关等级为12
       const RESERVED_LEVEL = 13;
       const INITIAL_DROP_LEVELS = [1, 2, 3];
@@ -820,6 +827,7 @@
       let levels = [];
       let ready = false;
       let state = "loading"; // loading | start | starting | playing | over | won
+      let pendingStart = false;
       let engine = null;
       let world = null;
       let bodies = new Set();
@@ -1706,7 +1714,7 @@
 
         const name = unlockQueue.shift();
         unlockActive = true;
-        unlockText.textContent = "你合成了" + name + "！";
+        unlockText.textContent = "逆合成了" + name + "！";
         unlockToast.classList.remove("show");
         void unlockToast.offsetWidth;
         unlockToast.classList.add("show");
@@ -1852,7 +1860,14 @@
       }
 
       function startGame() {
-        if (!ready || state !== "start") return;
+        if (!ready) {
+          if (startBtn && startBtn.disabled) return;
+          pendingStart = true;
+          if (startBtn) startBtn.textContent = "载入中…";
+          return;
+        }
+
+        if (state !== "start") return;
 
         state = "starting";
         gameScreen.hidden = false;
@@ -1960,12 +1975,33 @@
        * ---------------------------------------------------------------- */
       function resizeCanvas() {
         if (!canvas) return;
+
+        const viewportWidth = Math.max(
+          1,
+          (window.visualViewport && window.visualViewport.width) ||
+            window.innerWidth ||
+            document.documentElement.clientWidth ||
+            0
+        );
+        const viewportHeight = Math.max(
+          1,
+          (window.visualViewport && window.visualViewport.height) ||
+            window.innerHeight ||
+            document.documentElement.clientHeight ||
+            0
+        );
+
+        document.documentElement.style.setProperty("--app-width", viewportWidth + "px");
+        document.documentElement.style.setProperty("--app-height", viewportHeight + "px");
+
         const rect = canvas.getBoundingClientRect();
         if (rect.width <= 0 || rect.height <= 0) return;
 
         dpr = Math.min(window.devicePixelRatio || 1, 2.5);
-        const width = Math.max(1, Math.round(rect.width * dpr));
-        const height = Math.max(1, Math.round(rect.height * dpr));
+        const cssWidth = Math.min(rect.width, viewportWidth);
+        const cssHeight = Math.min(rect.height, viewportHeight);
+        const width = Math.max(1, Math.round(cssWidth * dpr));
+        const height = Math.max(1, Math.round(cssHeight * dpr));
 
         if (canvas.width !== width || canvas.height !== height) {
           canvas.width = width;
@@ -2209,14 +2245,34 @@
       }
 
       /* ----------------------------------------------------------------
+       * 移动端触摸辅助
+       * ---------------------------------------------------------------- */
+      function handleStartTouch(event) {
+        if (event.cancelable) event.preventDefault();
+        startGame();
+      }
+
+      function blockTouchScroll(event) {
+        if (event.cancelable) event.preventDefault();
+      }
+
+      /* ----------------------------------------------------------------
        * 事件绑定与初始化
        * ---------------------------------------------------------------- */
       function bindEvents() {
         startBtn.addEventListener("click", startGame);
+        startBtn.addEventListener("touchstart", handleStartTouch, { passive: false });
         restartBtn.addEventListener("click", restartGame);
         winRestartBtn.addEventListener("click", restartGame);
         overRestartBtn.addEventListener("click", restartGame);
         bgBtn.addEventListener("click", handleBackgroundColor);
+
+        canvas.addEventListener("touchstart", blockTouchScroll, { passive: false });
+        canvas.addEventListener("touchmove", blockTouchScroll, { passive: false });
+        canvas.addEventListener("touchend", blockTouchScroll, { passive: false });
+        canvas.addEventListener("touchcancel", blockTouchScroll, { passive: false });
+        boardWrap.addEventListener("touchstart", blockTouchScroll, { passive: false });
+        boardWrap.addEventListener("touchmove", blockTouchScroll, { passive: false });
 
         boardWrap.addEventListener("pointerdown", handlePointerDown, { passive: false });
         boardWrap.addEventListener("pointermove", handlePointerMove, { passive: false });
@@ -2243,7 +2299,18 @@
           const observer = new ResizeObserver(() => resizeCanvas());
           observer.observe(boardWrap);
         }
-        window.addEventListener("resize", resizeCanvas);
+        function handleViewportResize() {
+          resizeCanvas();
+        }
+
+        window.addEventListener("resize", handleViewportResize, { passive: true });
+        window.addEventListener("orientationchange", () => {
+          window.setTimeout(handleViewportResize, 120);
+        });
+        if (window.visualViewport) {
+          window.visualViewport.addEventListener("resize", handleViewportResize, { passive: true });
+          window.visualViewport.addEventListener("scroll", handleViewportResize, { passive: true });
+        }
 
         [startArt, nextImg].forEach((img) => {
           if (!img) return;
@@ -2263,10 +2330,16 @@
           ready = true;
           state = "start";
           startBtn.disabled = false;
+          startBtn.textContent = "开始游戏";
           updateNextPreview(false);
+          if (pendingStart) {
+            pendingStart = false;
+            startGame();
+          }
         } catch (error) {
           console.error(error);
           ready = false;
+          pendingStart = false;
           startBtn.disabled = true;
           startBtn.textContent = "加载失败";
         }
