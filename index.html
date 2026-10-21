@@ -777,7 +777,7 @@
        * ---------------------------------------------------------------- */
       const WORLD_W = 840;
       const WORLD_H = 1260;
-      const BASE_SIZE = 70;
+      const BASE_SIZE = 80;
       const MAX_LEVEL = 12; // 第13级按需求暂时留空；本版本最高可玩/通关等级为12
       const RESERVED_LEVEL = 13;
       const INITIAL_DROP_LEVELS = [1, 2, 3];
@@ -804,7 +804,7 @@
       const MAX_BODY_WIDTH = WORLD_W - PLAY_INSET * 2 - 16;
       const MAX_BODY_HEIGHT = WORLD_H - DANGER_Y - PLAY_INSET - 50;
       const FIXED_STEP = 1000 / 60;
-      const DROP_COOLDOWN = 150;
+      const DROP_COOLDOWN = 10;
       const DANGER_HOLD = 1000;
       const MAX_UPWARD_SPEED = 9.5;
       const TOAST_MS = 1500;
@@ -1822,7 +1822,7 @@
 
         const name = unlockQueue.shift();
         unlockActive = true;
-        unlockText.textContent = "逆合成了" + name + "！";
+        unlockText.textContent = "你合成了" + name + "！";
         unlockToast.classList.remove("show");
         void unlockToast.offsetWidth;
         unlockToast.classList.add("show");
